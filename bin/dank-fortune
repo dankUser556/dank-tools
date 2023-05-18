@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# Data
+FORTUNE_LIST=$HOME/dbin/dank-fortunes.list;
+
+# Flags
+DEBUG=false;
+SECRETS=false;
+
+function hndlExcept() {
+  case $1 in
+    MISSING_LIST)
+      echo No fortune list found!;
+      exit 4;;
+    NO_FORTUNES)
+      echo Fortune list is empty!;
+      exit 5;;
+    *)
+      echo Unhandled error occured!;
+      exit 3;;
+  esac;
+  exit 2;
+  return 0;
+};
+function genRandNum() {
+  local maxValue=$1
+  local randNum=$(($RANDOM % $maxValue + 1));
+
+  echo $randNum;
+
+  return 0;
+}
+function parseArgs() {
+  for arg in $@; do
+    case $arg in
+      -d|--debug) DEBUG=true;;
+      -s|--secret) SECRETS=true;;
+    esac;
+  done;
+
+  return 0;
+};
+function main() {
+  local fortuneNum='';
+  local fortune='';
+  local author='';
+  local author_set=false;
+
+  [[ ! -f "$FORTUNE_LIST" ]] && hndlExcept MISSING_LIST;
+
+  FORTUNE_COUNT=$(cat $FORTUNE_LIST | wc -l);
+  [[ "$FORTUNE_COUNT" -lt 1 ]] && hndlExcept NO_FORTUNES;
+
+  fortuneNum=$(genRandNum $FORTUNE_COUNT);
+  fortune="$(sed -n "$fortuneNum p" $FORTUNE_LIST)";
+
+  # Store author then print fortune
+  for word in ${fortune[@]}; do
+    if [[ "$author_set" == false ]]; then
+      if [[ "$word" == "--" ]]; then author_set=true;
+      else author+=(${word}); fi;
+    else printf "%s " ${word};
+    fi;
+  done;
+
+  # Print author
+  printf "\n\t-";
+  for name in ${author[@]}; do printf "%s " $name; done; printf "\n";
+
+  if [[ "$DEBUG" == true ]]; then
+    echo echo \$\{fortune\}\[@\]: ${fortune[@]};
+    echo echo \$\{author\}\[@\]: ${author[@]};
+  fi;
+
+  return 0;
+};
+parseArgs $@;
+main;
+exit 0;

@@ -1,0 +1,128 @@
+#!/bin/bash
+
+#
+# This tool is intended to store and maintain dank environment variables
+#
+
+# Config config
+D_CONFIG_DIR="${HOME}/.config/dankenv";
+D_ENV_VARS="${D_CONFIG_DIR}/denv_vars";
+
+# Local data
+CALL_HANDLE="$(basename $0)";
+
+# Flags
+UNSET_VAR=false;
+SETUP_ENV=false;
+
+# Data
+declare -a ENV_VAR_NAME_ARR=;
+declare -a ENV_VAR_VALS_ARR=;
+var_name=;
+var_value=;
+
+function help() {
+	echo Usage: $CALL_HANDLE \[option\] \[VARIABLE NAME\] \[VALUE ASSIGNMENT\];
+	echo
+	echo Options:
+	echo -u \| --unset	Unset named variable.
+	return 0;
+};
+function parseArgs() {
+	if [[ $# == 0 ]]; then
+		help;
+		exit 1;
+	fi;
+	for arg in $@; do
+		if [[ "$UNSET_VAR" == true ]]; then
+			UNSET_TGT=$arg;
+			return 0;
+		fi;
+		case $arg in
+			-u|--unset) UNSET_VAR=true;;
+			-s|--setup) SETUP_ENV=true;;
+			-*|--*) hndlExcept ARG $arg;;
+			*)
+				if [[ -z "$var_name" ]]; then
+					var_name=$arg;
+				else
+					var_value=$arg;
+				fi;;
+		esac;
+	done;
+
+	return 0;
+};
+function verify_config_dir() {
+	if [[ ! -d "$D_CONFIG_DIR" ]]; then
+		echo Creating $D_CONFIG_DIR.
+		mkdir -p $D_CONFIG_DIR;
+	fi;
+
+	return 0;
+};
+function fetch_config() {
+	local name;
+	local value;
+	verify_config_dir;
+	if [[ -f "$D_ENV_VARS" ]]; then
+		while read d_var; do
+			name=$(echo $d_var | awk '{print $1}');
+			value=$(echo $d_var | awk '{print $2}');
+			ENV_VAR_NAME_ARR+=($name);
+			ENV_VAR_VALS_ARR+=($value);
+		done <$D_ENV_VARS;
+	fi;
+
+	return 0;
+};
+function setup_env() {
+	echo Setup_env placeholder.
+
+	return 0;
+};
+function rm_var() {
+	local item_name=;
+	touch $D_ENV_VARS.wrk
+
+	while read con_vars; do
+		item_name=$(echo $con_vars | awk '{print $1}');
+		[[ "$1" == "$item_name" ]] && continue || echo $con_vars >> $D_ENV_VARS.wrk
+	done <$D_ENV_VARS;
+	mv $D_ENV_VARS.wrk $D_ENV_VARS
+
+	return 0;
+};
+function main() {
+	if [[ "$UNSET_VAR" == true ]]; then
+		echo Unsetting var: $UNSET_TGT.;
+		unset $UNSET_TGT;
+		rm_var $UNSET_TGT;
+		return 0;
+	fi;
+
+	fetch_config;
+	if [[ "$SETUP_ENV" == true ]]; then
+		echo Setting up environment.
+		setup_env;
+		return 0;
+	fi;
+
+	if [[ ! -z "${ENV_VAR_NAME_ARR[@]}" ]]; then
+		for env_var_name in ${ENV_VAR_NAME_ARR[@]}; do
+			if [[ "$var_name" == "$env_var_name" ]]; then
+				rm_var "$env_var_name";
+				break;
+			fi;
+		done;
+	fi;
+
+	echo $var_name $var_value >> $D_ENV_VARS;
+	# Check ENV_VAR_NAME_ARR for var_name
+	# If extant, update value, export new value
+	# Else, add to config file, then export value.
+	return 0;
+};
+parseArgs $@;
+main;
+exit 0;
