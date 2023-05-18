@@ -1,0 +1,73 @@
+# libdankmenus
+# Menus and prompts
+
+function promptYN() { # Provide prompt as a parameter in double-quotes
+    local prompt=$@;
+    local response='';
+    local shell=$(basename ${SHELL});
+
+    while [[ -z "$response" ]]; do
+	printf '%s [y\\n]\n:' "${prompt[@]}";
+	read response;
+	[[ "$shell" == "zsh" ]] && response="${response:l}" || response=${response,,};
+	case $response in
+	    y|ye|yes)
+		break;;
+	    n|no)
+		return 1;;
+	    *)
+		printf 'Invalid response: %s.\nTry again.\n\n' $response;
+		response='';;
+	esac;
+    done;
+    return 0;
+};
+function displayMenu() {
+  local choice_c=$( expr $(( $# - 1 )) );
+  local element=0;
+  local selection;
+
+  while [[ -z "$selection" ]]; do
+    for arg in $argv; do
+      if [[ "$element" -eq 0 ]]; then echo $arg;
+        else printf ' %i) %s\n' $element $arg;
+      fi;
+      (( element++ ));
+    done;
+
+    printf ': ';
+    read selection;
+    case $selection in
+      ''|*[!0-9]*)
+        echo Invalid selection, try again.;
+        element=0;
+        selection='';;
+      *)
+        if [[ "$selection" -gt "$choice_c" ]] || [[ "$selection" -eq 0 ]]; then
+          echo Invalid selection, try again.;
+	  element=0;
+	  selection='';
+        fi;;
+    esac;
+  done;
+
+  return $selection;
+};
+function getResponseInt() {
+    local max_choice=$1;
+    local _usr_rsp='';
+    echo "0) Exit."
+    while [ -z "$_usr_rsp" ]; do
+        printf ":";
+	read _usr_rsp;
+	if [[ ! "$_usr_rsp" -lt "$max_choice" ]]; then
+	    echo "Invalid selection. Try again";
+	    _usr_rsp='';
+	elif [[ "$_usr_rsp" == 0 ]]; then 
+	    echo "Exiting".
+	    exit 1;
+	fi;
+	
+    done;
+    return $_usr_rsp;
+};

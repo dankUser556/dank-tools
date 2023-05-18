@@ -1,0 +1,8 @@
+function __return() {
+	local pointer_name=$1;
+	local return_value=$2;
+
+	eval eval '$'pointer_name=${return_value};
+
+	[ "${pointer_name}" == "$return_value" ] && return 0 || return 1;
+};

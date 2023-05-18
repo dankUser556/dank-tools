@@ -1,0 +1,40 @@
+#!/bin/bash
+## libdankfunctions
+
+source libdankmenus
+function handle_exception() { # Provide Exception class as param1
+			      # Message to user in quotes, param2
+	local ex_class=$1
+	local ex_fatal=$2
+	local usr_msg_inc=false;
+	[ $# -gt 2 ] && usr_msg_inc=true;
+	case $ex_class in
+	  DIR_NOT_CREATED)
+            echo Directory $3 could not be created!;
+	    [ "$ex_fatal" == true ] && exit 1;;
+	  *)
+	    echo A fatal exception occured!;
+	    exit 2;;
+        esac;
+	[ "$usr_msg_inc" == true ] && echo $3;
+
+	return 0;
+};
+function assert_directory() { # Will return 1 if directory does not 
+			      # exist or cannot be created.
+    local create_dir=false;
+
+    for tgt_dir in $@; do
+      if [ ! -d "$tgt_dir" ]; then
+          echo $tgt_dir does not exist.
+          promptYN "Create $tgt_dir now?" && create_dir=true;
+          if [ "$create_dir" == true ]; then
+    	      echo mkdir -vp $tgt_dir || handle_exception DIR_NOT_CREATED true $tgt_dir;
+          else
+              handle_exception DIR_NOT_CREATED true $tgt_dir;
+          fi;
+      fi;
+    done;
+
+    return 0;
+};

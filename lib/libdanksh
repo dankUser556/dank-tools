@@ -1,0 +1,189 @@
+#!/bin/sh
+
+[[ -z "$LIBDANKSH_SOURCED" ]] && export LIBDANKSH_SOURCED=true;
+
+function dank_functions() { # Display functions sourced from libdanksh
+  local dlib_dir=${HOME}/dlib
+  local ldsh="${dlib_dir}/libdanksh"
+
+  cat $ldsh | gawk ' $1 ~ "function" { func_name_len=length($2)-2; func_name=substr($2,1,func_name_len); print func_name; if(NF>3) { printf "   "; for(i=5;i<=NF;i++) printf "%s ", $i; printf "\n\n";} else printf "\n"; } ' | moar;
+
+  return 0;
+};
+function rezdlib() { # Force shell to re-source libdanksh
+  unset LIBDANKSH_SOURCED;
+  source libdanksh;
+
+  return 0;
+};
+function rezzsh() { # Shortcut to re-source ~/.zshrc into current environment
+  source ${HOME}/.zshrc
+
+  return 0;
+};
+
+function handle_exception() { # Provide Exception class as param1
+			      # Message to user in quotes, param2
+	local ex_class=$1
+	local ex_fatal=$2
+	local usr_msg_inc=false;
+	[ $# -gt 2 ] && usr_msg_inc=true;
+	case $ex_class in
+	  DIR_NOT_CREATED)
+            echo Directory $3 could not be created!;
+	    [ "$ex_fatal" == true ] && exit 1;;
+	  FILE_NOT_FOUND)
+	    [ $usr_msg_inc == true ] && echo $3;
+	    [ "$ex_fatal" == true ] && exit 1;;
+	  *)
+	    echo A fatal exception occured!;
+	    exit 2;;
+        esac;
+	[ "$usr_msg_inc" == true ] && echo $3;
+
+	return 0;
+};
+function ls-ssh() { # Display known remote machines. Machine list
+		    # Stored in ${HOME}/.dconfig/remote-machines.list
+    local mlist_dir=${HOME}/.dconfig
+    local mlist="${mlist_dir}/remote-machines.list"
+
+    [ ! -d "${mlist_dir}" ] && mkdir -vp ${mlist_dir} #|| handle_exception DIR_NOT_CREATED true;
+    [ ! -f "${mlist}" ] && handle_exception FILE_NOT_FOUND true "File $mlist does not exist!";
+    echo List of remote machines in ${mlist};
+    while read mlist_entry; do
+	echo "${mlist_entry}";
+    done <$mlist
+
+    return 0;
+};
+function htb_connect() { # Connects to the hackthebox vpn found in /home/dank/Documents/vpn/
+  if [[ $# -ne 0 ]]; then
+    for arg in $@; do
+      case $arg in
+        -k)
+          local vpn_pid=$(pgrep openvpn | head -n1);
+          if [[ -z "$vpn_pid" ]]; then echo No vpn running.; fi;
+          while [[ ! -z "$vpn_pid" ]]; do
+            echo Sending SIGTERM to: $vpn_pid
+	    sudo kill -15 $vpn_pid;
+	    vpn_pid=$(pgrep openvpn | head -n1);
+          done;
+	  return 0;;
+	*) echo Arg not recognized: $arg; return 1;;
+      esac;
+    done;
+  fi;
+  vpn_pid=$(pgrep openvpn);
+  if [[ ! -z "$vpn_pid" ]]; then
+	  echo Vpn already open.;
+	  echo PID: $vpn_pid;
+	  return 2;
+  fi;
+  openvpn ~/Documents/vpn/htb.ovpn &> /dev/null & disown;
+
+  sleep 5;
+  pgrep openvpn || echo Error: pgrep did not return a pid for openvpn;
+
+  return 0;
+};
+function htb_set_target() { # Checks for valid IP entry and sets HTB_TARGET to entry
+  local errCheck;
+  
+  if [[ ! -z "${1}" ]]; then
+    errCheck=$(echo $1 | gawk -v FS="." '{if(NF !~ 4){print "FIELD_COUNT_ERR";exit 1}}{for(i=1;i<5;i++){if($i !~ /^[0-9]{1,3}$/){ print "FIELD_CONTENT_ERR" } if( $i > 255 ){ print FIELD_OUT_OF_RANGE}}}')
+  elif [[ -z "$HTB_TARGET" ]]; then
+    echo No argument \(IP address\) supplied!
+    return 1;
+  else
+    echo HTB_TARGET=$HTB_TARGET;
+    return 0;
+  fi;
+  if [[ ! -z "$errCheck" ]]; then
+    case $errCheck in
+      FIELD_COUNT_ERR) echo Ip length incorrect.; return 2;;
+      FIELD_CONTENT_ERR) echo Ip address contains an invalid field.; return 3;;
+      FIELD_OUT_OF_RANGE) echo Ip address contains a field out of range. return 4;;
+    esac;
+  fi;
+
+  dankenv HTB_TARGET $1;
+  register_denv;
+
+  echo HTB_TARGET=$HTB_TARGET;
+
+  return 0;
+};
+function htb_set_hostname() { # Adds HTB_TARGET to /etc/hosts with given hostname
+  local tgt_host_name=$1;
+  local e_host_ip='';
+  local e_host_name='';
+  
+  if [[ -z "$HTB_TARGET" ]]; then
+    echo \"$HTB_TARGET\" is not set!;
+    return 1;
+  fi;
+  
+  while read host_entry; do
+    e_host_ip=$(echo $host_entry|awk '{print $1}');
+    e_host_name=$(echo $host_entry|awk '{print $2}');
+    if [[ "$e_host_ip" == "$HTB_TARGET" ]]; then
+      echo \"$HTB_TARGET\" is in /etc/hosts already.
+      return 2;
+    elif [[ "$e_host_name" == "$tgt_host_name" ]]; then
+      echo \"$tgt_host_name\" is in /etc/hosts already.
+      return 2;
+    fi;
+  done </etc/hosts;
+
+  echo "${HTB_TARGET} ${tgt_host_name}" | sudo tee -a /etc/hosts
+  
+  return 0;
+};
+function zsh_err_hndlr() { # Generic error handler for errors in libdanksh functions running under zsh
+  case $1 in
+    wifi_status_empty)
+      echo "kill_wifi function in .zshrc reported empty WIFI_STATUS variable.";;
+    rfkill_nonzero)
+      echo "kill_wifi function in .zshrc reported rfkill returned non-zero status";;
+  esac;
+
+  return 0;
+};
+function kill_wifi() { # Checks status of wlan using rfkill and blocks it if enabled
+  local WIFI_STATUS=$(rfkill | tail -n1 | cut -d" " -f8)
+  
+  if [[ -z "$WIFI_STATUS" ]]; then
+     zsh_err_hndlr "wifi_status_empty";
+     return 1;
+  fi;
+  if [[ "$WIFI_STATUS" == unblocked ]]; then
+    rfkill block wlan &> /dev/null
+    if [[ $? -ne 0 ]]; then
+      zsh_err_hndlr "rfkill_nonzero";
+      return 2;
+    fi;
+  fi;
+  
+  return 0;
+}
+function boot-arch() { # Reboots the system to the Dank Solutions arch OS
+  local ARCH_ENTRY=$(sudo grep -i Dank /arch-boot/grub/grub.cfg | cut -d"'" -f2 | head -n1);
+
+  echo $ARCH_ENTRY
+  sudo grub-reboot "$ARCH_ENTRY"
+  sudo reboot now
+
+  return 0;
+};
+function register_denv() { # Import environment variables stored in dankenv config
+	local DENV_VARS="${HOME}/.config/dankenv/denv_vars"
+
+	while read D_VAR; do
+		tgt_name=$(echo $D_VAR | awk '{print $1}');
+		tgt_val=$(echo $D_VAR | awk '{print $2}');
+		eval export $tgt_name=$tgt_val;
+	done <$DENV_VARS;
+
+	return 0;
+};
